@@ -29,25 +29,23 @@ def advection_div_upwind(carrier, field, h_inv, is_panic=True):
     """
     ny, nx = carrier.shape
 
-    # 1. Obliczenie gradientów pola na krawędziach (dFx, dFy)
+    # calculate gradient on the edges
     dFx = (field[:, 1:] - field[:, :-1]) * h_inv
     dFy = (field[1:, :] - field[:-1, :]) * h_inv
 
-    # 2. Ustalenie kierunku przepływu (wiatru)
-    # Dla paniki: prędkość to ujemny gradient Z
-    # Dla polowania: prędkość to dodatni gradient S
+    # direction of the flow
     v_sign_x = -dFx if is_panic else dFx
     v_sign_y = -dFy if is_panic else dFy
 
-    # 3. Schemat Upwind: wybór stężenia nośnika "pod wiatr"
+    # upwind
     Cx = np.where(v_sign_x > 0, carrier[:, :-1], carrier[:, 1:])
     Cy = np.where(v_sign_y > 0, carrier[:-1, :], carrier[1:, :])
 
-    # 4. Obliczenie strumieni z poprawnym nośnikiem
+    # calculate stream
     Fx = Cx * dFx
     Fy = Cy * dFy
 
-    # --- Divergence (bez zmian, zgodnie z warunkami Neumanna) ---
+    # divergence according to Neumann conditions
     div = np.zeros((ny, nx))
     div[:, 1:-1] += (Fx[:, 1:] - Fx[:, :-1]) * h_inv
     div[:, 0]  += Fx[:, 0]  * h_inv
