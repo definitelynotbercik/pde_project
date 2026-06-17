@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.ndimage as ndimage
 
-
+# For PDE + SPDE
 def make_initial_mono(p):
     """Return (S0, Z0) on a (Ny, Nx) grid."""
     Ny, Nx = p['Ny'], p['Nx']
@@ -13,6 +13,81 @@ def make_initial_mono(p):
 
     Z0 = p['outbreak_f'] * blob
     S0 = np.maximum(S0 - Z0, 0.0)
+    return S0, Z0
+
+# For PDE 
+def make_initial_experiment_multiple(p):
+    """
+    Return (S0, Z0) on an (Ny, Nx) grid.
+    Spawns 4 random, smooth Gaussian outbreak epicenters.
+    """
+    Ny, Nx = p['Ny'], p['Nx']
+    
+    # Initialize baseline human population
+    people_density = p.get('people_density', 1.0)
+    S0 = np.full((Ny, Nx), people_density)
+    
+    # Initialize empty zombie grid
+    Z0 = np.zeros((Ny, Nx))
+
+    # Create coordinate grid for distance calculations
+    Y, X = np.ogrid[:Ny, :Nx]
+    
+    outbreak_f = p.get('outbreak_f',  1.0)
+    outbreak_r = p.get('outbreak_r', 2.0)
+    num_outbreaks = p.get('num_outbreaks', 4) # Default to 4 if not specified
+    # Spawn 4 random outbreaks
+    for _ in range(num_outbreaks):
+        rand_y = np.random.randint(0, Ny)
+        rand_x = np.random.randint(0, Nx)
+        
+        # Calculate the smooth Gaussian blob
+        r2 = (Y - rand_y) ** 2 + (X - rand_x) ** 2
+        blob = np.exp(-r2 / (2.0 * outbreak_r ** 2))
+        
+        # Add this horde to the overall zombie map
+        Z0 += outbreak_f * blob
+    
+    # Ensure humans are depleted where zombies spawn
+    S0 = np.maximum(S0 - Z0, 0.0)
+    
+    return S0, Z0
+# For PDE
+def make_initial_half_populated(p):
+    """
+    Return (S0, Z0) on an (Ny, Nx) grid.
+    Populates the left half with humans and spawns N random Gaussian outbreaks.
+    """
+    Ny, Nx = p['Ny'], p['Nx']
+    
+    # 1. Initialize Humans: Fill only the left half
+    S0 = np.zeros((Ny, Nx))
+    S0[:, :Nx // 2] = p['people_density']
+    
+    # 2. Initialize Zombies: Empty grid
+    Z0 = np.zeros((Ny, Nx))
+
+    # Coordinate grid for Gaussian calculation
+    Y, X = np.ogrid[:Ny, :Nx]
+    
+    outbreak_f = p['outbreak_f']
+    outbreak_r = p['outbreak_r']
+    num_outbreaks = p.get('num_outbreaks', 4) # Default to 4 if not specified
+
+    # 3. Spawn N random outbreaks
+    for _ in range(num_outbreaks):
+        rand_y = np.random.randint(0, Ny)
+        rand_x = np.random.randint(0, Nx)
+        
+        # Calculate Gaussian blob
+        r2 = (Y - rand_y) ** 2 + (X - rand_x) ** 2
+        blob = np.exp(-r2 / (2.0 * outbreak_r ** 2))
+        
+        Z0 += outbreak_f * blob
+    
+    # 4. Maintain mass balance: remove humans where zombies are placed
+    S0 = np.maximum(S0 - Z0, 0.0)
+    
     return S0, Z0
 
 

@@ -1,7 +1,9 @@
 import numpy as np
 import time
 from src.numerical import *
+from scipy.ndimage import gaussian_filter
 
+# SPDE
 def solve_model2(S0, Z0, p, seed=42, tag='M2'):
     """
     Model 2: stochastic PDE (Euler-Maruyama)
@@ -81,3 +83,136 @@ def solve_model2(S0, Z0, p, seed=42, tag='M2'):
     return dict(snaps_S=snaps_S, snaps_Z=snaps_Z, times=ts,
                 hist_S=np.array(hist_S), hist_Z=np.array(hist_Z),
                 S_final=S, Z_final=Z, dt=dt)
+
+def model1_base_system(S, Z, dx, dy, dt, Ds, Dz, beta, alpha):
+    # Only calculate the inverse grid spacing needed for diffusion
+    h2_inv = 1.0 / (dx * dy) 
+
+    # 1. Pure Diffusion
+    laplacian_S = laplacian_2d(S, h2_inv)
+    laplacian_Z = laplacian_2d(Z, h2_inv)
+    
+    # Notice: div_panic has been entirely removed from the base model.
+    # The base model should only handle diffusion and infection/decay.
+
+    # 2. Forward Euler Time Integration
+    S_new = S + dt * (Ds * laplacian_S - beta * S * Z)
+    Z_new = Z + dt * (Dz * laplacian_Z + beta * S * Z - alpha * S * Z)
+
+    # 3. Enforce Non-negativity
+    return np.maximum(S_new, 0), np.maximum(Z_new, 0)
+
+def model1_pure_system(S, Z, dx, dy, dt, Ds, Dz):
+    """
+    Pure Diffusion Model:
+    dS/dt = Ds * Laplace(S)
+    dZ/dt = Dz * Laplace(Z)
+    """
+    # Calculate inverse step sizes based on grid spacing
+    h2_inv = 1.0 / (dx * dy)
+    
+    # 1. Spatial Diffusion (Custom Laplacian Approximation)
+    laplacian_S = laplacian_2d(S, h2_inv)
+    laplacian_Z = laplacian_2d(Z, h2_inv)
+
+    # 2. Final Explicit Update Equations (Forward Euler)
+    # The advection (panic) and reaction (infection) terms have been entirely removed.
+    S_new = S + dt * (Ds * laplacian_S)
+    Z_new = Z + dt * (Dz * laplacian_Z)
+
+    # Return the updated grids
+    return np.maximum(S_new, 0), np.maximum(Z_new, 0)
+
+def model1_updated_system(S, Z, dx, dy, dt, Ds, Dz, beta, alpha, k_panic, fear_radius):
+    # Calculate inverse step sizes based on grid spacing
+    h_inv = 1.0 / dx
+    h2_inv = 1.0 / (dx * dy)
+
+    # 1. Spatial Diffusion
+    laplacian_S = laplacian_2d(S, h2_inv)
+    laplacian_Z = laplacian_2d(Z, h2_inv)
+
+    # 2. Fear Field
+    # Humans don't just react to the zombies in their exact cell, but the general area
+    Z_fear = gaussian_filter(Z, sigma=fear_radius)
+
+    # 3. Divergence of the panic term (Advection)
+    # Using your conservative advection helper based on the fear gradient
+    div_panic = advection_div_upwind(S, Z_fear, h_inv)
+
+    # 4. Saturated Infection Term
+    raw_infection_rate = beta * S * Z
+    
+    # Calculate actual number of humans that WOULD be bitten this step
+    intended_infections = raw_infection_rate * dt
+    
+    # Safety Net: Cap the infections to the number of available Susceptibles
+    actual_infections = np.minimum(intended_infections, S)
+    
+    # Convert back to a rate for the update equation
+    safe_infection_term = actual_infections / dt
+
+    # 5. Explicit Update Equations
+    S_new = S + dt * (Ds * laplacian_S + k_panic * div_panic - safe_infection_term)
+    Z_new = Z + dt * (Dz * laplacian_Z + safe_infection_term - alpha * S * Z)
+
+    # Note: `np.maximum` handles extreme stochastic noise drops, 
+    # but the core PDE mechanics will no longer clone humans.
+    return np.maximum(S_new, 0), np.maximum(Z_new, 0)
+
+def model1_simulation_loop(sim_type, S, Z, p):
+    dx, dy, dt = p['dx'], p['dy'], p['dt']
+    Ds, Dz, beta, alpha = p['Ds'], p['Dz'], p['beta'], p['alpha']
+    k_panic, fear_radius = p['k_panic'], p['fear_radius']
+    NUM_STEPS = p['NUM_STEPS']
+    
+    # Check if snap_every is in params, otherwise default to 10
+    snap_every = p.get('snap_every', 10)
+
+    # CFL STABILITY CHECK
+    D_max = max(Ds, Dz)
+    dt_cfl = (dx * dy) / (4.0 * D_max)
+    if dt > dt_cfl:
+        dt = dt_cfl * 0.9 
+        print(f"⚠️ WARNING: dt={p['dt']} is unstable! Reducing to safe limit: dt={dt:.5f}")
+    
+    # 1D arrays for the line graphs
+    history_S_total, history_Z_total = [], []
+
+    # 3D arrays (lists of 2D grids) for the GIF
+    history_S_grids, history_Z_grids = [], []
+
+    print(f"Running '{sim_type}' Simulation...")
+    if sim_type=='base':
+        for step in range(NUM_STEPS):
+            S, Z = model1_base_system(S, Z, dx, dy, dt, Ds, Dz, beta, alpha)
+        
+            history_S_total.append(np.sum(S))
+            history_Z_total.append(np.sum(Z))
+
+            if step % snap_every == 0:
+                history_S_grids.append(S.copy()) # .copy() is strictly required here
+                history_Z_grids.append(Z.copy())
+
+    elif sim_type=='updated':
+        for step in range(NUM_STEPS):
+            S, Z = model1_updated_system(S, Z, dx, dy, dt, Ds, Dz, beta, alpha, k_panic, fear_radius)
+        
+            history_S_total.append(np.sum(S))
+            history_Z_total.append(np.sum(Z))
+
+            if step % snap_every == 0:
+                history_S_grids.append(S.copy()) # .copy() is strictly required here
+                history_Z_grids.append(Z.copy())
+    elif sim_type=='pure':
+        for step in range(NUM_STEPS):
+            S, Z = model1_pure_system(S, Z, dx, dy, dt, Ds, Dz)
+        
+            history_S_total.append(np.sum(S))
+            history_Z_total.append(np.sum(Z))
+
+            if step % snap_every == 0:
+                history_S_grids.append(S.copy()) # .copy() is strictly required here
+                history_Z_grids.append(Z.copy())
+            
+    return history_S_total, history_Z_total, history_S_grids, history_Z_grids

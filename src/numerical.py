@@ -56,3 +56,26 @@ def advection_div_upwind(carrier, field, h_inv, is_panic=True):
     div[-1, :] -= Fy[-1, :] * h_inv
 
     return div
+
+def advection_div(carrier, field, h_inv):
+    """Computes the conservative divergence of advection."""
+    ny, nx = carrier.shape
+    
+    Cx = 0.5 * (carrier[:, 1:] + carrier[:, :-1])
+    dFx = (field[:, 1:] - field[:, :-1]) * h_inv
+    Fx = Cx * dFx
+    
+    Cy = 0.5 * (carrier[1:, :] + carrier[:-1, :])
+    dFy = (field[1:, :] - field[:-1, :]) * h_inv
+    Fy = Cy * dFy
+    
+    div = np.zeros((ny, nx))
+    div[:, 1:-1] += (Fx[:, 1:] - Fx[:, :-1]) * h_inv
+    div[:, 0]  += Fx[:, 0]  * h_inv
+    div[:, -1] -= Fx[:, -1] * h_inv
+    
+    div[1:-1, :] += (Fy[1:, :] - Fy[:-1, :]) * h_inv
+    div[0, :]  += Fy[0, :]  * h_inv
+    div[-1, :] -= Fy[-1, :] * h_inv
+    
+    return div

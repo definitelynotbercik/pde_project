@@ -80,3 +80,54 @@ def make_gif(res, fname, title='', fps=8):
     print(f'  Done: {fname_mp4}')
 
     return fname_mp4
+
+def day_0(S0,Z0,params):
+    fig, axes = plt.subplots(1, 2)
+
+    im1 = axes[0].imshow(S0, origin='lower', cmap=CMAP_S, vmin=0, vmax=params['people_density'])
+    axes[0].set_title('Initial S (Healthy Human Density)', color='#ffcc44', fontweight='bold')
+    plt.colorbar(im1, ax=axes[0], shrink=0.8, label='Human Count per Cell')
+
+    im2 = axes[1].imshow(Z0, origin='lower', cmap=CMAP_Z, vmin=0, vmax=params['outbreak_f'])
+    axes[1].set_title('Initial Z (Patient Zero Epicenter)', color='#44ff88', fontweight='bold')
+    plt.colorbar(im2, ax=axes[1], shrink=0.8, label='Zombie Count per Cell')
+
+    plt.suptitle('Day 0: The Calm Before the Global Storm', fontsize=16, color='white', fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+def model1_population_plot(history_S_total, history_Z_total):
+    """Plots the total population dynamics over time using the dark theme palette."""
+    # Create a figure with 2 vertically stacked subplots
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10, 8), sharex=True)
+
+    # Determine the takeover point if it exists
+    takeover_step = None
+    if np.any(np.array(history_Z_total) > np.array(history_S_total)):
+        takeover_step = np.argmax(np.array(history_Z_total) > np.array(history_S_total))
+
+    # --- Subplot 1: Susceptible Humans ---
+    ax1.plot(history_S_total, label='Susceptible Humans (S)', color='#ff8800', linewidth=3)
+    if takeover_step is not None:
+        ax1.axvline(x=takeover_step, color='white', linestyle='--', alpha=0.5, label='Takeover Point')
+
+    ax1.set_title('Total Population Dynamics Over Time', color='white', fontweight='bold')
+    ax1.set_ylabel('Human Count')
+    ax1.set_ylim(0, 1.05 * max(history_S_total))  # Gives a nice 5% padding at the top
+    ax1.legend()
+    ax1.grid(True, color='#333333')
+
+    # --- Subplot 2: Zombies ---
+    ax2.plot(history_Z_total, label='Zombies (Z)', color='#00aa55', linewidth=3)
+    if takeover_step is not None:
+        ax2.axvline(x=takeover_step, color='white', linestyle='--', alpha=0.5, label='Takeover Point')
+
+    ax2.set_xlabel('Time Steps')
+    ax2.set_ylabel('Zombie Count')
+    ax2.set_ylim(0, 1.05 * max(history_Z_total))  # Gives a nice 5% padding at the top
+    ax2.legend()
+    ax2.grid(True, color='#333333')
+
+    # Adjust layout so labels don't overlap
+    plt.tight_layout()
+    plt.show()
