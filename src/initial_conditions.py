@@ -16,12 +16,14 @@ def make_initial_mono(p):
     return S0, Z0
 
 
-def make_initial_hetero(p):
+def make_initial_hetero(p, seed=42):
     """
     Returns (S0, Z0) with a heterogeneous initial human population density.
     S0 is generated using low-pass filtered random noise to simulate 'cities'.
     """
     Ny, Nx = p['Ny'], p['Nx']
+
+    rng = np.random.default_rng(seed)
 
     # create noise
     raw_noise = np.random.rand(Ny, Nx)
