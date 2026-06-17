@@ -5,6 +5,7 @@ import scipy.ndimage as ndimage
 def make_initial_mono(p):
     """Return (S0, Z0) on a (Ny, Nx) grid."""
     Ny, Nx = p['Ny'], p['Nx']
+
     S0 = np.ones((Ny, Nx))
 
     Y, X = np.ogrid[:Ny, :Nx]
@@ -16,13 +17,15 @@ def make_initial_mono(p):
     return S0, Z0
 
 # For PDE 
-def make_initial_experiment_multiple(p):
+def make_initial_experiment_multiple(p,seed=42):
     """
     Return (S0, Z0) on an (Ny, Nx) grid.
     Spawns 4 random, smooth Gaussian outbreak epicenters.
     """
     Ny, Nx = p['Ny'], p['Nx']
     
+    rng = np.random.default_rng(seed)
+
     # Initialize baseline human population
     people_density = p.get('people_density', 1.0)
     S0 = np.full((Ny, Nx), people_density)
@@ -53,12 +56,14 @@ def make_initial_experiment_multiple(p):
     
     return S0, Z0
 # For PDE
-def make_initial_half_populated(p):
+def make_initial_half_populated(p,seed=42):
     """
     Return (S0, Z0) on an (Ny, Nx) grid.
     Populates the left half with humans and spawns N random Gaussian outbreaks.
     """
     Ny, Nx = p['Ny'], p['Nx']
+
+    rng = np.random.default_rng(seed)
     
     # 1. Initialize Humans: Fill only the left half
     S0 = np.zeros((Ny, Nx))
