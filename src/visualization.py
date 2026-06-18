@@ -175,3 +175,63 @@ def population_dynamics(res, filename):
     plt.tight_layout()
     plt.savefig(filename, dpi=140, bbox_inches='tight')
     plt.show()
+
+def model1_generate_gif(grid_history_S, grid_history_Z, filename,params, cap_human=True):
+    """
+    Generates an animated GIF of the spatial dynamics.
+    Humans use static scaling (to watch the lights go out).
+    Zombies use dynamic scaling (to track the horde's shape at all times).
+    """
+    print(f"Generating Dynamic GIF... This might take a minute.")
+    
+    # Create figure with the dark apocalyptic theme
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    # --- 1. Initialize Human Subplot (Static Scaling) ---
+    cax1 = ax1.imshow(grid_history_S[0], cmap=CMAP_S, origin='lower', vmin=0)
+    ax1.set_title('Human Density (S)', color='#ffcc44', fontweight='bold')
+    fig.colorbar(cax1, ax=ax1, shrink=0.8, label='Absolute Human Count')
+
+    # --- 2. Initialize Zombie Subplot (Dynamic Scaling) ---
+    initial_max_z = np.max(grid_history_Z[0]) if np.max(grid_history_Z[0]) > 0 else 1.0
+    cax2 = ax2.imshow(grid_history_Z[0], cmap=CMAP_Z, origin='lower', vmin=0, vmax=initial_max_z)
+    ax2.set_title('Zombie Density (Z)', color='#44ff88', fontweight='bold')
+    fig.colorbar(cax2, ax=ax2, shrink=0.8, label='Relative Horde Density')
+
+    fig.suptitle('Day 0.0: The Calm Before the Storm', fontsize=16, color='white', fontweight='bold')
+    plt.tight_layout()
+
+    # --- 3. Animation Update Loop ---
+    def update(frame):
+        current_S = grid_history_S[frame]
+        current_Z = grid_history_Z[frame]
+        
+        # Update the visual grid matrices
+        cax1.set_data(current_S)
+        cax2.set_data(current_Z)
+        
+        # DYNAMIC SCALING FOR ZOMBIES: 
+        # Find the highest concentration of zombies in this specific frame
+        current_max_S = np.max(current_S) if np.max(current_S) > 0 else 1
+        current_max_Z = np.max(current_Z) if np.max(current_Z) > 0 else 1
+        
+        # Apply the new maximums to the heatmaps so the colorbar rescales
+        cax1.set_clim(vmin=0, vmax=params['people_density'] if cap_human else current_max_S)
+        cax2.set_clim(vmin=0, vmax=current_max_Z)
+        
+        # Update Title (Translating frames * interval into "Days")
+        current_day = frame*params['plot_interval']
+        fig.suptitle(f'Global Outbreak Progress - Day {current_day:.1f}', fontsize=16, color='white', fontweight='bold')
+        
+        return cax1, cax2
+
+    ani = FuncAnimation(fig, update, frames=len(grid_history_S), blit=False)
+    
+    # Close the plot to prevent it from displaying a duplicate static image
+    ani.save(filename, writer=PillowWriter(fps=15))
+    plt.close(fig)
+
+    print("Done! Displaying animation below:")
+    
+    # Render and return the animation inline
+    return ani
