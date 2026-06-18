@@ -124,40 +124,28 @@ def model1_pure_system(S, Z, dx, dy, dt, Ds, Dz):
     return np.maximum(S_new, 0), np.maximum(Z_new, 0)
 
 def model1_updated_system(S, Z, dx, dy, dt, Ds, Dz, beta, alpha, k_panic, fear_radius):
-    # Calculate inverse step sizes based on grid spacing
+    # Calculate inverse step sizes (Assuming dx == dy for simplicity, otherwise use dx**2 and dy**2 separately inside the laplacian function)
     h_inv = 1.0 / dx
-    h2_inv = 1.0 / (dx * dy)
+    h2_inv = 1.0 / (dx**2) 
 
     # 1. Spatial Diffusion
     laplacian_S = laplacian_2d(S, h2_inv)
     laplacian_Z = laplacian_2d(Z, h2_inv)
 
     # 2. Fear Field
-    # Humans don't just react to the zombies in their exact cell, but the general area
     Z_fear = gaussian_filter(Z, sigma=fear_radius)
 
     # 3. Divergence of the panic term (Advection)
-    # Using your conservative advection helper based on the fear gradient
     div_panic = advection_div_upwind(S, Z_fear, h_inv)
 
-    # 4. Saturated Infection Term
-    raw_infection_rate = beta * S * Z
-    
-    # Calculate actual number of humans that WOULD be bitten this step
-    intended_infections = raw_infection_rate * dt
-    
-    # Safety Net: Cap the infections to the number of available Susceptibles
-    actual_infections = np.minimum(intended_infections, S)
-    
-    # Convert back to a rate for the update equation
-    safe_infection_term = actual_infections / dt
+    # 4. Reaction Terms (Rates)
+    actual_bites = beta * S * Z
+    zombie_deaths = alpha * S * Z
 
-    # 5. Explicit Update Equations
-    S_new = S + dt * (Ds * laplacian_S + k_panic * div_panic - safe_infection_term)
-    Z_new = Z + dt * (Dz * laplacian_Z + safe_infection_term - alpha * S * Z)
+    # 5. Explicit Update Equations (dt applied to ALL terms!)
+    S_new = S + dt * (Ds * laplacian_S + k_panic * div_panic - actual_bites)
+    Z_new = Z + dt * (Dz * laplacian_Z - zombie_deaths + actual_bites)
 
-    # Note: `np.maximum` handles extreme stochastic noise drops, 
-    # but the core PDE mechanics will no longer clone humans.
     return np.maximum(S_new, 0), np.maximum(Z_new, 0)
 
 def model1_simulation_loop(sim_type, S, Z, p):
