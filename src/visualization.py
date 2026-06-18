@@ -33,18 +33,22 @@ def make_rgb(S, Z, s_scale, z_scale):
     return np.clip(rgb, 0, 1)
 
 
-def make_gif(res, fname, title='', fps=8):
-    """Create and save an RGB-composite GIF with side colorbars."""
+def make_gif(res, fname, title='', fps=8, params=None, cap_human=False):
+    """Create and save an RGB-composite MP4 with dynamically scaling side colorbars."""
     sS, sZ, ts = res['snaps_S'], res['snaps_Z'], res['times']
 
-    # maximum value for the bar
-    s_sc = max(s.max() for s in sS) or 1
-    z_sc = max(z.max() for z in sZ) or 1
+    # --- Inicjalizacja dla klatki 0 ---
+    initial_max_s = np.max(sS[0]) if np.max(sS[0]) > 0 else 1.0
+    if cap_human and params and 'people_density' in params:
+        initial_max_s = params['people_density']
+
+    initial_max_z = np.max(sZ[0]) if np.max(sZ[0]) > 0 else 1.0
 
     fig, ax = plt.subplots(figsize=(8.5, 7))
     fig.patch.set_facecolor('#0d0d0d')
 
-    rgb0 = make_rgb(sS[0], sZ[0], s_sc, z_sc)
+    # Przekazujemy początkowe maksima do funkcji make_rgb
+    rgb0 = make_rgb(sS[0], sZ[0], initial_max_s, initial_max_z)
     im = ax.imshow(rgb0, origin='lower')
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -52,21 +56,42 @@ def make_gif(res, fname, title='', fps=8):
 
     divider = make_axes_locatable(ax)
 
+    # Inicjalizacja pasków kolorów (początkowa skala)
     cax_s = divider.append_axes("right", size="4%", pad=0.15)
-    sm_s = ScalarMappable(norm=Normalize(vmin=0, vmax=s_sc), cmap=CMAP_S)
+    sm_s = ScalarMappable(norm=Normalize(vmin=0, vmax=initial_max_s), cmap=CMAP_S)
     cb_s = fig.colorbar(sm_s, cax=cax_s)
     cb_s.set_label('Susceptible (S)', color='#ff7700', fontweight='bold')
     cb_s.ax.yaxis.set_tick_params(color='white', labelcolor='white')
 
-    cax_z = divider.append_axes("right", size="4%", pad=0.7)
-    sm_z = ScalarMappable(norm=Normalize(vmin=0, vmax=z_sc), cmap=CMAP_Z)
+    cax_z = divider.append_axes("right", size="4%", pad=0.9)  # pad=0.9 by uniknąć nachodzenia tekstu
+    sm_z = ScalarMappable(norm=Normalize(vmin=0, vmax=initial_max_z), cmap=CMAP_Z)
     cb_z = fig.colorbar(sm_z, cax=cax_z)
     cb_z.set_label('Zombie (Z)', color='#00dd55', fontweight='bold')
     cb_z.ax.yaxis.set_tick_params(color='white', labelcolor='white')
 
+    # --- Pętla aktualizująca klatki ---
     def _update(f):
-        im.set_data(make_rgb(sS[f], sZ[f], s_sc, z_sc))
+        current_S = sS[f]
+        current_Z = sZ[f]
+
+        # 1. DYNAMICZNE SKALOWANIE: Znalezienie maksimów w obecnej klatce
+        current_max_s = np.max(current_S) if np.max(current_S) > 0 else 1.0
+        if cap_human and params and 'people_density' in params:
+            current_max_s = params['people_density']
+
+        current_max_z = np.max(current_Z) if np.max(current_Z) > 0 else 1.0
+
+        # 2. Aktualizacja obrazu RGB z relatywnym skalowaniem
+        im.set_data(make_rgb(current_S, current_Z, current_max_s, current_max_z))
         ttl.set_text(f'{title}  t = {ts[f]:.1f}')
+
+        # 3. Przerysowanie pasków legendy z nowymi limitami (set_clim)
+        sm_s.set_clim(vmin=0, vmax=current_max_s)
+        cb_s.update_normal(sm_s)  # Wymusza odświeżenie etykiet osi paska S
+
+        sm_z.set_clim(vmin=0, vmax=current_max_z)
+        cb_z.update_normal(sm_z)  # Wymusza odświeżenie etykiet osi paska Z
+
         return [im]
 
     anim = FuncAnimation(fig, _update, frames=len(ts),
@@ -130,4 +155,23 @@ def model1_population_plot(history_S_total, history_Z_total):
 
     # Adjust layout so labels don't overlap
     plt.tight_layout()
+    plt.show()
+
+def population_dynamics(res, filename):
+
+    t_arr2 = np.arange(len(res['hist_S'])) * res['dt']
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.plot(t_arr2, res['hist_S'], color='#ff8800', lw=2, label='S (susceptible)')
+    ax.plot(t_arr2, res['hist_Z'], color='#00cc55', lw=2, label='Z (zombie)')
+    ax.plot(t_arr2, res['hist_S'] + res['hist_Z'],
+            color='#aaaaaa', lw=1, ls='--', label='S + Z')
+    ax.set_xlabel('Time');
+    ax.set_ylabel('Total density')
+    ax.set_title('Model 2 — Population Dynamics',
+                 fontweight='bold', color='#ffcc66')
+    ax.legend(fontsize=12, framealpha=0.3);
+    ax.grid(alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(filename, dpi=140, bbox_inches='tight')
     plt.show()
