@@ -182,7 +182,6 @@ def model1_generate_gif(grid_history_S, grid_history_Z, filename,params, cap_hum
     Humans use static scaling (to watch the lights go out).
     Zombies use dynamic scaling (to track the horde's shape at all times).
     """
-    print(f"Generating Dynamic GIF... This might take a minute.")
     
     # Create figure with the dark apocalyptic theme
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
@@ -228,10 +227,8 @@ def model1_generate_gif(grid_history_S, grid_history_Z, filename,params, cap_hum
     ani = FuncAnimation(fig, update, frames=len(grid_history_S), blit=False)
     
     # Close the plot to prevent it from displaying a duplicate static image
-    ani.save(filename, writer=PillowWriter(fps=15))
+    ani.save(f"plots/{filename}", writer=PillowWriter(fps=15))
     plt.close(fig)
-
-    print("Done! Displaying animation below:")
     
     # Render and return the animation inline
     return ani

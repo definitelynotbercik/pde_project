@@ -167,7 +167,7 @@ def model1_simulation_loop(sim_type, S, Z, p):
     NUM_STEPS = p['NUM_STEPS']
     
     # Check if snap_every is in params, otherwise default to 10
-    snap_every = p.get('snap_every', 10)
+    snap_every = p.get('plot_interval', 10)
 
     # CFL STABILITY CHECK
     D_max = max(Ds, Dz)
@@ -182,7 +182,6 @@ def model1_simulation_loop(sim_type, S, Z, p):
     # 3D arrays (lists of 2D grids) for the GIF
     history_S_grids, history_Z_grids = [], []
 
-    print(f"Running '{sim_type}' Simulation...")
     if sim_type=='base':
         for step in range(NUM_STEPS):
             S, Z = model1_base_system(S, Z, dx, dy, dt, Ds, Dz, beta, alpha)
